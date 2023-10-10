@@ -92,8 +92,9 @@ sorted_indices = np.argsort(similarity_scores)
 
 # Get the top 10 most similar images
 top_N = 10
-most_similar_images = [image_files[i] for i in sorted_indices[:top_N]]
+most_similar_image_paths = [image_files[i] for i in sorted_indices[:top_N]]
+most_similar_scores = [similarity_scores[i] for i in sorted_indices[:top_N]]
 
-# Display the most similar images
-for img_path in most_similar_images:
-    print(img_path)
+# Display the most similar images with their similarity scores
+for img_path, score in zip(most_similar_image_paths, most_similar_scores):
+    print(f"Image Path: {img_path}, Similarity Score: {score}")
