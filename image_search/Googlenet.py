@@ -55,7 +55,7 @@ def compute_euclidean_distance(query_vector, dataset_vectors):
 
 root_directory = r"C:\Users\ahmed\Desktop\Supcom\INDP3_AIM\cbir\bdimage\image_db" 
 image_files = get_image_files(root_directory)
-
+"""
 final_vector_list=[]
 
 for image_path in image_files:
@@ -67,7 +67,7 @@ for image_path in image_files:
 
 feature_vector_df = pd.DataFrame(final_vector_list)
 feature_vector_df.to_csv("feature_vectors.csv", index=False)
-
+"""
 
 
 root_directory = r"C:\Users\ahmed\Desktop\Supcom\INDP3_AIM\cbir\bdimage\image_db"
@@ -77,7 +77,7 @@ image_files = get_image_files(root_directory)
 dataset_features = pd.read_csv("feature_vectors.csv")  # Make sure to provide the correct path
 
 # Load the new image and extract its features (InceptionV3 and LBP)
-new_image_path = r"C:\Users\ahmed\Downloads\ball.webp"
+new_image_path = r"C:\Users\ahmed\Pictures\jupiter.jpg"
 new_inceptionv3_features = extract_inceptionv3_features(new_image_path)
 new_lbp_features = extract_lbp_features(new_image_path)
 
