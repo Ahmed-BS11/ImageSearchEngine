@@ -98,3 +98,13 @@ most_similar_scores = [similarity_scores[i] for i in sorted_indices[:top_N]]
 # Display the most similar images with their similarity scores
 for img_path, score in zip(most_similar_image_paths, most_similar_scores):
     print(f"Image Path: {img_path}, Similarity Score: {score}")
+
+"""
+paths_df = pd.DataFrame({'image_path': image_files})
+
+# Concatenate the two DataFrames
+combined_df = pd.concat([paths_df, dataset_features], axis=1)
+
+# Save the combined DataFrame to a CSV file
+combined_df.to_csv("Final_Data.csv", index=False)
+"""
