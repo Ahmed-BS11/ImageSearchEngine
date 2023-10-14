@@ -50,8 +50,14 @@ def compute_euclidean_distance(query_vector, dataset_vectors):
     distances = np.linalg.norm(dataset_vectors - query_vector, axis=1)
     return distances
 
-base_model = InceptionV3(weights='imagenet')
-model = Model(inputs=base_model.input, outputs=base_model.layers[-2].output)
+@st.cache_resource
+def load_inceptionv3_model():
+    base_model = InceptionV3(weights='imagenet')
+    model = Model(inputs=base_model.input, outputs=base_model.layers[-2].output)
+    return model
+
+# Load the InceptionV3 model
+model = load_inceptionv3_model()
 
 es = Elasticsearch("http://localhost:9200")
 
@@ -94,8 +100,13 @@ while hits:
 es.clear_scroll(scroll_id=res['_scroll_id'])
 
 # Define a slider for the user to choose the number of pictures to show
-num_results = st.slider("Number of Pictures to Show", min_value=1, max_value=30, value=10)
 
+@st.cache_data(experimental_allow_widgets=True)  # 👈 Set the parameter
+def get_num_results():
+    num_results = st.slider("Number of Pictures to Show", min_value=1, max_value=30, value=10)
+    return num_results
+
+num_results=get_num_results()
 option = st.radio("Select Input Option", ("Upload Image", "Enter Image URL","Search By Tags"))
 
 if option == "Upload Image":
@@ -193,7 +204,7 @@ if option == "Search By Tags":
     tags_input = st.text_input("Enter Tags (comma-separated)", "")
 
 # Search button
-    if st.button("Search"):
+    if st.button("Search") or tags_input:
         # Split the input tags by commas and trim spaces
         tags = [tag.strip() for tag in tags_input.split(",")]
 
