@@ -23,7 +23,8 @@ def is_valid_image_url(url):
         return True
     except Exception as e:
         return False
-
+    
+@st.cache_data
 def extract_inceptionv3_features(img):
     img = cv2.resize(img, (299, 299))
     img = preprocess_input(img)
@@ -44,6 +45,7 @@ def extract_lbp_features(img):
 def combine_features(inceptionv3_features, lbp_features):
     return np.concatenate((inceptionv3_features, lbp_features), axis=None)
 
+@st.cache_data
 def compute_euclidean_distance(query_vector, dataset_vectors):
     distances = np.linalg.norm(dataset_vectors - query_vector, axis=1)
     return distances
@@ -91,8 +93,10 @@ while hits:
 # Don't forget to clear the scroll context when done
 es.clear_scroll(scroll_id=res['_scroll_id'])
 
+# Define a slider for the user to choose the number of pictures to show
+num_results = st.slider("Number of Pictures to Show", min_value=1, max_value=30, value=10)
 
-option = st.radio("Select Input Option", ("Upload Image", "Enter Image URL"))
+option = st.radio("Select Input Option", ("Upload Image", "Enter Image URL","Search By Tags"))
 
 if option == "Upload Image":
     uploaded_image = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png", 'webp'])
@@ -115,7 +119,7 @@ if option == "Upload Image":
             with st.spinner(text="Searching..."):
                 similarity_scores = compute_euclidean_distance(new_combined_features, dataset_features)
                 sorted_indices = np.argsort(similarity_scores)
-                top_N = 10
+                top_N = num_results
                 most_similar_image_paths = [images_path[i] for i in sorted_indices[:top_N]]
                 most_similar_scores = [similarity_scores[i] for i in sorted_indices[:top_N]]
 
@@ -144,7 +148,6 @@ if option == "Upload Image":
 if option == "Enter Image URL":
     # Text input for entering an image URL
     image_url = st.text_input("Enter Image URL")
-    
     if image_url:
         try:
             # Send an HTTP GET request to the image URL
@@ -166,9 +169,11 @@ if option == "Enter Image URL":
                 with st.spinner(text="Searching..."):
                     similarity_scores = compute_euclidean_distance(new_combined_features, dataset_features)
                     sorted_indices = np.argsort(similarity_scores)
-                    top_N = 10
-                    most_similar_image_paths = [images_path[i] for i in sorted_indices[:top_N]]
-                    most_similar_scores = [similarity_scores[i] for i in sorted_indices[:top_N]]
+                    
+                    # Limit the number of search results based on the user's selection
+                    max_search_results = min(num_results, len(dataset_features))
+                    most_similar_image_paths = [images_path[i] for i in sorted_indices[:max_search_results]]
+                    most_similar_scores = [similarity_scores[i] for i in sorted_indices[:max_search_results]]
 
                     for img_path, score in zip(most_similar_image_paths, most_similar_scores):
                         st.subheader(f"Image Path: {img_path}, Similarity Score: {score}")
@@ -183,3 +188,57 @@ if option == "Enter Image URL":
                     st.write("Search complete.")
         except Exception as e:
             st.write("Error: Invalid Image URL or unable to retrieve image.")
+
+if option == "Search By Tags":
+    tags_input = st.text_input("Enter Tags (comma-separated)", "")
+
+# Search button
+    if st.button("Search"):
+        # Split the input tags by commas and trim spaces
+        tags = [tag.strip() for tag in tags_input.split(",")]
+
+        # Define the search query based on the entered tags
+        search_body = {
+            "size": num_results,  # Adjust the size as needed
+            "query": {
+                "terms": {
+                    "tags": tags
+                }
+            }
+        }
+
+        # Specify the index to search (in this case, 'flickrphotos')
+        index_name = 'flickrphotos'
+
+        # Perform the search
+        try:
+            response = es.search(index=index_name, body=search_body)
+            hits = response['hits']['hits']
+
+            # Display search results with columns
+            st.subheader("Search Results:")
+
+            # Specify the number of images per column
+            images_per_column = 3
+
+            for i in range(0, len(hits), images_per_column):
+                column = st.columns(images_per_column)
+                for j in range(i, min(i + images_per_column, len(hits))):
+                    hit = hits[j]
+                    source = hit['_source']
+                    with column[j % images_per_column]:
+                        st.write(f"Title: {source.get('title', 'N/A')}")
+                        #st.write(f"Tags: {source.get('tags', 'N/A')}")
+                        farm = source.get('flickr_farm', 'N/A')
+                        server = source.get('flickr_server', 'N/A')
+                        photo_id = source.get('id', 'N/A')
+                        secret = source.get('flickr_secret', 'N/A')
+                        image_url = f"http://farm{farm}.staticflickr.com/{server}/{photo_id}_{secret}.jpg"
+                        if is_valid_image_url(image_url):
+                            st.image(image_url, caption=f"Image for {source.get('title', 'N/A')}")
+                        else:
+                            continue
+            st.write(f"Total hits: {len(hits)}")
+
+        except Exception as e:
+            st.error(f"Error: {e}")
