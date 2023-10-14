@@ -12,6 +12,8 @@ import numpy as np
 import cv2
 import os
 import pandas as pd
+import requests
+from io import BytesIO
 
 def is_valid_image_url(url):
     try:
@@ -69,7 +71,6 @@ res = es.search(index=index_name, size=batch_size, scroll=scroll_timeout)
 
 # Extract the initial batch of hits
 hits = res['hits']['hits']
-
 while hits:
     for hit in hits:
         features_dense1 = hit['_source']['features_dense1']
@@ -97,29 +98,88 @@ if option == "Upload Image":
     uploaded_image = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png", 'webp'])
 
     if uploaded_image is not None:
-        image = Image.open(uploaded_image)
+        image = Image.open(uploaded_image).convert("RGB")
         st.image(image, caption="Uploaded Image", use_column_width=True)
         image = np.array(image)
         new_inceptionv3_features = extract_inceptionv3_features(image)
         new_lbp_features = extract_lbp_features(image)
         new_combined_features = combine_features(new_inceptionv3_features, new_lbp_features)
 
-        # Center the "Search" button
-        st.markdown("<div style='text-align: center;'><button class='big-button' onclick='search()'>Search</button></div>", unsafe_allow_html=True)
+
+        # Flag to control the search loop
+        cancel_search = False
 
         if st.button("Search", key="search_button", help="Click to perform the search"):
-            similarity_scores = compute_euclidean_distance(new_combined_features, dataset_features)
-            sorted_indices = np.argsort(similarity_scores)
-            top_N = 10
-            most_similar_image_paths = [images_path[i] for i in sorted_indices[:top_N]]
-            most_similar_scores = [similarity_scores[i] for i in sorted_indices[:top_N]]
+            # Clear any previous search results
+            st.spinner()
+            with st.spinner(text="Searching..."):
+                similarity_scores = compute_euclidean_distance(new_combined_features, dataset_features)
+                sorted_indices = np.argsort(similarity_scores)
+                top_N = 10
+                most_similar_image_paths = [images_path[i] for i in sorted_indices[:top_N]]
+                most_similar_scores = [similarity_scores[i] for i in sorted_indices[:top_N]]
 
-            for img_path, score in zip(most_similar_image_paths, most_similar_scores):
-                st.subheader(f"Image Path: {img_path}, Similarity Score: {score}")
+                for img_path, score in zip(most_similar_image_paths, most_similar_scores):
+                    if cancel_search:
+                        st.write("Search canceled.")
+                        break  # Exit the loop if canceled
+                    st.subheader(f"Image Path: {img_path}, Similarity Score: {score}")
 
-                if os.path.isfile(img_path):  # Check if the image file exists locally
-                    similar_image = Image.open(img_path)
-                    st.subheader("Most Similar Image:")
-                    st.image(similar_image, use_column_width=True)
+                    if os.path.isfile(img_path):  # Check if the image file exists locally
+                        similar_image = Image.open(img_path)
+                        st.subheader("Most Similar Image:")
+                        st.image(similar_image, use_column_width=True)
+                    else:
+                        st.write("Image file not found at the specified path")
+
+                if cancel_search:
+                    st.write("Search canceled.")
                 else:
-                    st.write("Image file not found at the specified path")
+                    st.write("Search complete.")
+
+        # Add a "Cancel" button
+        if st.button("Cancel Search", key="cancel_button"):
+            cancel_search = True
+
+if option == "Enter Image URL":
+    # Text input for entering an image URL
+    image_url = st.text_input("Enter Image URL")
+    
+    if image_url:
+        try:
+            # Send an HTTP GET request to the image URL
+            response = requests.get(image_url)
+            response.raise_for_status()  # Raise an exception for invalid URLs
+            
+            # Check if the response content is an image
+            image = Image.open(BytesIO(response.content))
+            image = Image.open(BytesIO(response.content)).convert("RGB")
+            st.image(image, caption="Uploaded Image", use_column_width=True)
+            image = np.array(image)
+            new_inceptionv3_features = extract_inceptionv3_features(image)
+            new_lbp_features = extract_lbp_features(image)
+            new_combined_features = combine_features(new_inceptionv3_features, new_lbp_features)
+
+            if st.button("Search", key="search_button", help="Click to perform the search"):
+                # Clear any previous search results
+                st.spinner()
+                with st.spinner(text="Searching..."):
+                    similarity_scores = compute_euclidean_distance(new_combined_features, dataset_features)
+                    sorted_indices = np.argsort(similarity_scores)
+                    top_N = 10
+                    most_similar_image_paths = [images_path[i] for i in sorted_indices[:top_N]]
+                    most_similar_scores = [similarity_scores[i] for i in sorted_indices[:top_N]]
+
+                    for img_path, score in zip(most_similar_image_paths, most_similar_scores):
+                        st.subheader(f"Image Path: {img_path}, Similarity Score: {score}")
+
+                        if os.path.isfile(img_path):  # Check if the image file exists locally
+                            similar_image = Image.open(img_path)
+                            st.subheader("Most Similar Image:")
+                            st.image(similar_image, use_column_width=True)
+                        else:
+                            st.write("Image file not found at the specified path")
+
+                    st.write("Search complete.")
+        except Exception as e:
+            st.write("Error: Invalid Image URL or unable to retrieve image.")
