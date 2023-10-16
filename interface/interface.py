@@ -14,6 +14,8 @@ import os
 import pandas as pd
 import requests
 from io import BytesIO
+from autocorrect import Speller
+spell = Speller(lang='en')
 
 def is_valid_image_url(url):
     try:
@@ -207,7 +209,7 @@ if option == "Search By Tags":
     if st.button("Search") or tags_input:
         # Split the input tags by commas and trim spaces
         tags = [tag.strip() for tag in tags_input.split(",")]
-
+        tags = [spell(tag) for tag in tags]
         # Define the search query based on the entered tags
         search_body = {
             "size": num_results,  # Adjust the size as needed

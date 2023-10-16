@@ -3,7 +3,8 @@ from elasticsearch import Elasticsearch
 from PIL import Image
 import requests
 from io import BytesIO
-
+from autocorrect import Speller
+spell = Speller(lang='en')
 def is_valid_image_url(url):
     try:
         # Send an HTTP GET request to the image URL
@@ -29,6 +30,7 @@ tags_input = st.text_input("Enter Tags (comma-separated)", "")
 if st.button("Search"):
     # Split the input tags by commas and trim spaces
     tags = [tag.strip() for tag in tags_input.split(",")]
+    tags = [spell(tag) for tag in tags]
 
     # Define the search query based on the entered tags
     search_body = {
@@ -61,7 +63,7 @@ if st.button("Search"):
                 source = hit['_source']
                 with column[j % images_per_column]:
                     st.write(f"Title: {source.get('title', 'N/A')}")
-                    #st.write(f"Tags: {source.get('tags', 'N/A')}")
+                    st.write(f"Tags: {source.get('tags', 'N/A')}")
                     farm = source.get('flickr_farm', 'N/A')
                     server = source.get('flickr_server', 'N/A')
                     photo_id = source.get('id', 'N/A')
