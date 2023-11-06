@@ -15,6 +15,8 @@ import pandas as pd
 import requests
 from io import BytesIO
 from autocorrect import Speller
+import json  # Import the json module
+
 spell = Speller(lang='en')
 
 def is_valid_image_url(url):
@@ -58,6 +60,40 @@ def load_inceptionv3_model():
     model = Model(inputs=base_model.input, outputs=base_model.layers[-2].output)
     return model
 
+@st.cache_data(experimental_allow_widgets=True)  # 👈 Set the parameter
+def get_num_results():
+    num_results = st.slider("Number of Pictures to Show", min_value=1, max_value=30, value=10)
+    return num_results
+
+num_results=get_num_results()
+
+def search_by_image_query(feature_vector=None,size=num_results):
+    if feature_vector is None:
+        raise ValueError("Please enter an Image ID or a Feature Vector")
+
+    # Convert the NumPy array to a Python list
+    feature_vector = feature_vector.tolist()
+
+    query = {
+        "query": {
+            "elastiknn_nearest_neighbors": {
+                "vec": feature_vector,
+                "field": "vector",
+                "similarity": "l2",
+                "model": "lsh",
+                "candidates": 10
+            }
+        }
+    }
+
+    res = es.search(index=index_name, body=query, size=size)
+
+    for hit in res["hits"]["hits"]:
+        path = hit["_source"]["path"]
+        print(path)
+        image = Image.open(path)
+        st.image(image, caption="Image from Elasticsearch", use_column_width=True)
+
 # Load the InceptionV3 model
 model = load_inceptionv3_model()
 
@@ -66,49 +102,21 @@ es = Elasticsearch("http://localhost:9200")
 st.title("Image Search")
 index_name = "images_data"
 
-# Initialize lists to store dataset features and paths
-dataset_features = []
-images_path = []
-
-# Set the batch size for each request
-batch_size = 1000
-
-# Define the scroll timeout
-scroll_timeout = "1m"  # 1 minute, adjust as needed
-
-# Create an initial search request with scrolling
-res = es.search(index=index_name, size=batch_size, scroll=scroll_timeout)
-
-# Extract the initial batch of hits
-hits = res['hits']['hits']
-while hits:
-    for hit in hits:
-        features_dense1 = hit['_source']['features_dense1']
-        features_dense2 = hit['_source']['features_dense2']
-        features_dense3 = hit['_source']['features_dense3']
-
-        # Combine all three feature sets into a single vector
-        combined_features = np.concatenate((features_dense1, features_dense2, features_dense3), axis=None)
-
-        # Store the combined features and the image path
-        dataset_features.append(combined_features)
-        images_path.append(hit['_source']['path'])
-
-    # Perform a scroll request to get the next batch of hits
-    res = es.scroll(scroll_id=res['_scroll_id'], scroll=scroll_timeout)
-    hits = res['hits']['hits']
-
-# Don't forget to clear the scroll context when done
-es.clear_scroll(scroll_id=res['_scroll_id'])
-
 # Define a slider for the user to choose the number of pictures to show
+custom_css = """
+    <style>
+        .custom-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 24px;
+            font-size: 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+    </style>
+"""
 
-@st.cache_data(experimental_allow_widgets=True)  # 👈 Set the parameter
-def get_num_results():
-    num_results = st.slider("Number of Pictures to Show", min_value=1, max_value=30, value=10)
-    return num_results
-
-num_results=get_num_results()
 option = st.radio("Select Input Option", ("Upload Image", "Enter Image URL","Search By Tags"))
 
 if option == "Upload Image":
@@ -121,42 +129,13 @@ if option == "Upload Image":
         new_inceptionv3_features = extract_inceptionv3_features(image)
         new_lbp_features = extract_lbp_features(image)
         new_combined_features = combine_features(new_inceptionv3_features, new_lbp_features)
-
-
-        # Flag to control the search loop
-        cancel_search = False
-
         if st.button("Search", key="search_button", help="Click to perform the search"):
             # Clear any previous search results
             st.spinner()
             with st.spinner(text="Searching..."):
-                similarity_scores = compute_euclidean_distance(new_combined_features, dataset_features)
-                sorted_indices = np.argsort(similarity_scores)
-                top_N = num_results
-                most_similar_image_paths = [images_path[i] for i in sorted_indices[:top_N]]
-                most_similar_scores = [similarity_scores[i] for i in sorted_indices[:top_N]]
+                # Use the search_by_image_query function to perform the search
+                search_by_image_query(new_combined_features, size=num_results)
 
-                for img_path, score in zip(most_similar_image_paths, most_similar_scores):
-                    if cancel_search:
-                        st.write("Search canceled.")
-                        break  # Exit the loop if canceled
-                    st.subheader(f"Image Path: {img_path}, Similarity Score: {score}")
-
-                    if os.path.isfile(img_path):  # Check if the image file exists locally
-                        similar_image = Image.open(img_path)
-                        st.subheader("Most Similar Image:")
-                        st.image(similar_image, use_column_width=True)
-                    else:
-                        st.write("Image file not found at the specified path")
-
-                if cancel_search:
-                    st.write("Search canceled.")
-                else:
-                    st.write("Search complete.")
-
-        # Add a "Cancel" button
-        if st.button("Cancel Search", key="cancel_button"):
-            cancel_search = True
 
 if option == "Enter Image URL":
     # Text input for entering an image URL
@@ -168,7 +147,6 @@ if option == "Enter Image URL":
             response.raise_for_status()  # Raise an exception for invalid URLs
             
             # Check if the response content is an image
-            image = Image.open(BytesIO(response.content))
             image = Image.open(BytesIO(response.content)).convert("RGB")
             st.image(image, caption="Uploaded Image", use_column_width=True)
             image = np.array(image)
@@ -180,27 +158,11 @@ if option == "Enter Image URL":
                 # Clear any previous search results
                 st.spinner()
                 with st.spinner(text="Searching..."):
-                    similarity_scores = compute_euclidean_distance(new_combined_features, dataset_features)
-                    sorted_indices = np.argsort(similarity_scores)
-                    
-                    # Limit the number of search results based on the user's selection
-                    max_search_results = min(num_results, len(dataset_features))
-                    most_similar_image_paths = [images_path[i] for i in sorted_indices[:max_search_results]]
-                    most_similar_scores = [similarity_scores[i] for i in sorted_indices[:max_search_results]]
-
-                    for img_path, score in zip(most_similar_image_paths, most_similar_scores):
-                        st.subheader(f"Image Path: {img_path}, Similarity Score: {score}")
-
-                        if os.path.isfile(img_path):  # Check if the image file exists locally
-                            similar_image = Image.open(img_path)
-                            st.subheader("Most Similar Image:")
-                            st.image(similar_image, use_column_width=True)
-                        else:
-                            st.write("Image file not found at the specified path")
-
-                    st.write("Search complete.")
+                    # Use the search_by_image_query function to perform the search
+                    search_by_image_query(new_combined_features, size=num_results)
         except Exception as e:
-            st.write("Error: Invalid Image URL or unable to retrieve image.")
+            st.write("Error: Invalid Image URL or unable to retrieve")
+
 
 if option == "Search By Tags":
     tags_input = st.text_input("Enter Tags (comma-separated)", "")
