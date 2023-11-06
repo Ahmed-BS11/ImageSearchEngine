@@ -67,7 +67,7 @@ def get_num_results():
 
 num_results=get_num_results()
 
-def search_by_image_query(feature_vector=None,size=num_results):
+def search_by_image_query(feature_vector=None, size=num_results):
     if feature_vector is None:
         raise ValueError("Please enter an Image ID or a Feature Vector")
 
@@ -88,11 +88,21 @@ def search_by_image_query(feature_vector=None,size=num_results):
 
     res = es.search(index=index_name, body=query, size=size)
 
+    search_results = []
     for hit in res["hits"]["hits"]:
         path = hit["_source"]["path"]
-        print(path)
         image = Image.open(path)
-        st.image(image, caption="Image from Elasticsearch", use_column_width=True)
+        search_results.append(image)
+
+    if search_results:
+        st.write("First 3 by 3 similar images:")
+        columns = st.columns(3)
+
+        for i, result in enumerate(search_results[:size]):
+            with columns[i % 3]:
+                st.image(result, caption=f"Result {i + 1}", use_column_width=True)
+    else:
+        st.write("No similar images found.")
 
 # Load the InceptionV3 model
 model = load_inceptionv3_model()
