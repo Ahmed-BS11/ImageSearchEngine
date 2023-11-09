@@ -64,6 +64,7 @@ def load_inceptionv3_model():
 def get_num_results():
     num_results = st.sidebar.slider("Number of Pictures to Show", min_value=1, max_value=30, value=10)
     return num_results
+st.sidebar.title("Parameters")
 
 num_results=get_num_results()
 
@@ -103,11 +104,28 @@ def search_by_image_query(feature_vector=None, size=num_results):
                 st.image(result, caption=f"Result {i + 1}", use_column_width=True)
     else:
         st.write("No similar images found.")
-st.image("logo.png", use_column_width=False, width=200)
+
+left_co, cent_co,last_co = st.columns(3)
+with cent_co:
+    st.image("logo.png", use_column_width=False, width=200)
+
+
+st.markdown(
+    """
+    <style>
+        button[title^=Exit]+div [data-testid=stImage]{
+            text-align: center;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            width: 100%;
+        }
+    </style>
+    """, unsafe_allow_html=True
+)
 
 # Add a brief introduction to your project
 st.title("Image and Text Search Engine")
-
 st.write("This project demonstrates a comprehensive search engine that allows users to search for images based on content, tags, and more.")
 # Load the InceptionV3 model
 model = load_inceptionv3_model()
