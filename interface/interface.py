@@ -62,7 +62,7 @@ def load_inceptionv3_model():
 
 @st.cache_data(experimental_allow_widgets=True)  # 👈 Set the parameter
 def get_num_results():
-    num_results = st.slider("Number of Pictures to Show", min_value=1, max_value=30, value=10)
+    num_results = st.sidebar.slider("Number of Pictures to Show", min_value=1, max_value=30, value=10)
     return num_results
 
 num_results=get_num_results()
@@ -103,13 +103,17 @@ def search_by_image_query(feature_vector=None, size=num_results):
                 st.image(result, caption=f"Result {i + 1}", use_column_width=True)
     else:
         st.write("No similar images found.")
+st.image("logo.png", use_column_width=False, width=200)
 
+# Add a brief introduction to your project
+st.title("Image and Text Search Engine")
+
+st.write("This project demonstrates a comprehensive search engine that allows users to search for images based on content, tags, and more.")
 # Load the InceptionV3 model
 model = load_inceptionv3_model()
 
 es = Elasticsearch("http://localhost:9200")
 
-st.title("Image Search")
 index_name = "images_data"
 
 # Define a slider for the user to choose the number of pictures to show
@@ -127,10 +131,10 @@ custom_css = """
     </style>
 """
 
-option = st.radio("Select Input Option", ("Upload Image", "Enter Image URL","Search By Tags"))
-
+# Define a radio button for selecting the input option
+option = st.sidebar.radio("Select Input Option", ("Upload Image", "Enter Image URL", "Search By Tags"))
 if option == "Upload Image":
-    uploaded_image = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png", 'webp'])
+    uploaded_image = st.sidebar.file_uploader("Upload an image", type=["jpg", "jpeg", "png", 'webp'])
 
     if uploaded_image is not None:
         image = Image.open(uploaded_image).convert("RGB")
@@ -139,7 +143,7 @@ if option == "Upload Image":
         new_inceptionv3_features = extract_inceptionv3_features(image)
         new_lbp_features = extract_lbp_features(image)
         new_combined_features = combine_features(new_inceptionv3_features, new_lbp_features)
-        if st.button("Search", key="search_button", help="Click to perform the search"):
+        if st.sidebar.button("Search", key="search_button", help="Click to perform the search"):
             # Clear any previous search results
             st.spinner()
             with st.spinner(text="Searching..."):
@@ -149,7 +153,7 @@ if option == "Upload Image":
 
 if option == "Enter Image URL":
     # Text input for entering an image URL
-    image_url = st.text_input("Enter Image URL")
+    image_url = st.sidebar.text_input("Enter Image URL")
     if image_url:
         try:
             # Send an HTTP GET request to the image URL
@@ -164,7 +168,7 @@ if option == "Enter Image URL":
             new_lbp_features = extract_lbp_features(image)
             new_combined_features = combine_features(new_inceptionv3_features, new_lbp_features)
 
-            if st.button("Search", key="search_button", help="Click to perform the search"):
+            if st.sidebar.button("Search", key="search_button", help="Click to perform the search"):
                 # Clear any previous search results
                 st.spinner()
                 with st.spinner(text="Searching..."):
@@ -175,7 +179,7 @@ if option == "Enter Image URL":
 
 
 if option == "Search By Tags":
-    tags_input = st.text_input("Enter Tags (comma-separated)", "")
+    tags_input = st.sidebar.text_input("Enter Tags (comma-separated)", "")
 
 # Search button
     if st.button("Search") or tags_input:

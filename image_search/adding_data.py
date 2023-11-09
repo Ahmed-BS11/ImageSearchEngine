@@ -22,7 +22,7 @@ try:
                     "type": "elastiknn_dense_float_vector",
                     "elastiknn": {
                         "dims": 2058,
-                        "similarity": "l2",  # Use "l2" for Euclidean distance
+                        "similarity": "L2",  # Use "l2" for Euclidean distance
                         "model": "lsh",
                         "L": 99,
                         "k": 1,
